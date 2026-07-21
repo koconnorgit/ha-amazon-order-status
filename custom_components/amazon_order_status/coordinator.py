@@ -285,8 +285,13 @@ class AmazonOrdersCoordinator(DataUpdateCoordinator):
         # using the UTC date can ask for "future" emails and return 0. Use one day
         # earlier so we always fetch recent emails; we filter by since_utc in Python.
         since_date_imap = _imap_date_str(since_utc - timedelta(days=1))
-        # No charset for date-only criterion; some servers reject CHARSET with SINCE
-        typ, data = mail.search(None, f'(SINCE "{since_date_imap}")')
+        # Restrict the search to Amazon emails only. Searching all mail in folders like
+        # Gmail All Mail can touch hundreds of unrelated recent messages and block HA
+        # startup while every body is fetched.
+        # FROM "amazon.com" is broad enough to include the common order/tracking
+        # senders (auto-confirm@amazon.com, shipment-tracking@amazon.com, no-reply@amazon.com).
+        # No charset for date-only criterion; some servers reject CHARSET with SINCE.
+        typ, data = mail.search(None, f'(SINCE "{since_date_imap}" FROM "amazon.com")')
 
         if typ != "OK":
             _LOGGER.error("IMAP search failed")
